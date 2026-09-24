@@ -25,6 +25,16 @@ class TestNLPaxletClusterPipeline(unittest.TestCase):
     PROC_URI = "proc://taskand.dev/cluster/distributed-audit/v1"
     PAXLET_URN = "urn:paxlet:cluster-distributed-audit"
 
+    @classmethod
+    def setUpClass(cls):
+        res = subprocess.run(
+            ["docker", "ps", "--filter", "name=taskand-node1", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+        )
+        if "taskand-node1" not in res.stdout:
+            raise unittest.SkipTest("Taskand cluster containers offline. Run tests/run_cluster_test.sh")
+
     def test_01_nl_plan_compilation_and_paxlet_packaging_on_node1(self):
         """Node 1 compiles an NL-derived plan into a cryptographically verified Paxlet package."""
         plan_dict = {
