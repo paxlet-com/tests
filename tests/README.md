@@ -63,4 +63,9 @@ bash tests/run_cluster_test.sh
 2. **Autonomous Inter-Node Communication & Registry Sync**:
    - Nodes monitor peer health and catalog manifests via `proc://taskand.dev/cluster/monitor/v1` and `/.well-known/catalog.json`.
    - When a peer exports a new package, nodes detect `PEER_NEW_PACKAGES` and autonomously pull it over HTTP, verify its SHA-256 package hash, install files into the local `generated/` directory, and register the package with status `candidate` (or `active` if configured).
+3. **End-to-End NL-to-Paxlet Multi-Node Execution**:
+   - Compiles natural language intent or intermediate plan into a validated Paxlet package with cryptographic manifest and SHA-256 digest (`urn:paxlet:...`).
+   - Packages the bundle into a Taskand cluster procedure and broadcasts it across the mesh.
+   - Nodes autonomously pull the procedure, verify checksums, and execute concurrently, returning node-specific execution data and tamper-evident `.paxlet/receipts/` across all 3 nodes.
+
 

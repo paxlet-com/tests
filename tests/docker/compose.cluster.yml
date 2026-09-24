@@ -22,13 +22,17 @@ services:
       - "8071:8077"
       - "2221:22"
     volumes:
-      - ${TASKAND_SOURCE_DIR:-../../taskand}:/opt/taskand-template:ro
+      - ${TASKAND_SOURCE_DIR:-/home/tom/github/paxlet-com/taskand}:/opt/taskand-template:ro
+      - ${PAXLET_SOURCE_DIR:-/home/tom/github/paxlet-com/paxlet}:/opt/paxlet:ro
+      - ${NL_DSL_SH_SOURCE_DIR:-/home/tom/github/paxlet-com/nl-dsl-sh}:/opt/nl-dsl-sh:ro
       - node1_data:/opt/taskand
     environment:
       - TASKAND_NODE=node1
       - TASKAND_BIND=0.0.0.0
       - TASKAND_AUTH_TOKEN=test-cluster-auth-token
       - AUTO_START_GATEWAY=1
+      - PYTHONPATH=/opt/paxlet:/opt/nl-dsl-sh/src:/opt/taskand
+      - TASKAND_SHELL_PYTHON=/usr/local/bin/python3
 
   taskand-node2:
     build:
@@ -43,13 +47,17 @@ services:
       - "8072:8077"
       - "2222:22"
     volumes:
-      - ${TASKAND_SOURCE_DIR:-../../taskand}:/opt/taskand-template:ro
+      - ${TASKAND_SOURCE_DIR:-/home/tom/github/paxlet-com/taskand}:/opt/taskand-template:ro
+      - ${PAXLET_SOURCE_DIR:-/home/tom/github/paxlet-com/paxlet}:/opt/paxlet:ro
+      - ${NL_DSL_SH_SOURCE_DIR:-/home/tom/github/paxlet-com/nl-dsl-sh}:/opt/nl-dsl-sh:ro
       - node2_data:/opt/taskand
     environment:
       - TASKAND_NODE=node2
       - TASKAND_BIND=0.0.0.0
       - TASKAND_AUTH_TOKEN=test-cluster-auth-token
       - AUTO_START_GATEWAY=1
+      - PYTHONPATH=/opt/paxlet:/opt/nl-dsl-sh/src:/opt/taskand
+      - TASKAND_SHELL_PYTHON=/usr/local/bin/python3
 
   taskand-node3:
     build:
@@ -64,13 +72,17 @@ services:
       - "8073:8077"
       - "2223:22"
     volumes:
-      - ${TASKAND_SOURCE_DIR:-../../taskand}:/opt/taskand-template:ro
+      - ${TASKAND_SOURCE_DIR:-/home/tom/github/paxlet-com/taskand}:/opt/taskand-template:ro
+      - ${PAXLET_SOURCE_DIR:-/home/tom/github/paxlet-com/paxlet}:/opt/paxlet:ro
+      - ${NL_DSL_SH_SOURCE_DIR:-/home/tom/github/paxlet-com/nl-dsl-sh}:/opt/nl-dsl-sh:ro
       - node3_data:/opt/taskand
     environment:
       - TASKAND_NODE=node3
       - TASKAND_BIND=0.0.0.0
       - TASKAND_AUTH_TOKEN=test-cluster-auth-token
       - AUTO_START_GATEWAY=1
+      - PYTHONPATH=/opt/paxlet:/opt/nl-dsl-sh/src:/opt/taskand
+      - TASKAND_SHELL_PYTHON=/usr/local/bin/python3
 
 volumes:
   node1_data:

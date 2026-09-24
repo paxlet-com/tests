@@ -8,7 +8,7 @@ set -e
 if [ ! -f "/opt/taskand/bin/taskand" ] && [ -d "/opt/taskand-template" ]; then
     echo "[$(hostname)] Initializing local taskand workspace from template..."
     mkdir -p /opt/taskand
-    cp -r /opt/taskand-template/. /opt/taskand/
+    rsync -a --exclude=.git --exclude=.ruff_cache --exclude=venv --exclude=log --exclude=.subactor --exclude=.planfile /opt/taskand-template/ /opt/taskand/
 fi
 
 # Ensure TASKAND_BIND is 0.0.0.0 for cluster access
