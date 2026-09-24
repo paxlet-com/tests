@@ -1,20 +1,13 @@
-# syntax=docker/dockerfile:1
-FROM python:3.12-slim
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    git \
-    nodejs \
-    npm \
-    bubblewrap \
-    ca-certificates \
+FROM python:3.13-slim
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
+COPY paxlet /inputs/paxlet
+COPY nl-dsl-sh /inputs/nl-dsl-sh
+RUN pip install --no-cache-dir /inputs/paxlet /inputs/nl-dsl-sh
+COPY taskand /workspace/taskand
+COPY tests /workspace/tests
+COPY source-inventory.json /workspace/source-inventory.json
 WORKDIR /workspace
-
-# Install pytest and runtime dependencies
-RUN pip install --no-cache-dir pytest pydantic litellm requests pyyaml
-
-ENV PYTHONPATH=/workspace/tests:/workspace/taskand:/workspace/paxlet:/workspace/nl-dsl-sh
-
-ENTRYPOINT ["python", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]
+ENV PYTHONPATH=/workspace/taskand:/workspace/tests PYTHONDONTWRITEBYTECODE=1
+ENTRYPOINT ["python"]
+CMD ["-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"]

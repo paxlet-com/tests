@@ -1,17 +1,18 @@
-"""Comprehensive E2E test suite for Taskand & Paxlet autonomy validation.
+"""Component and CLI E2E checks for Taskand shell integration.
 
-Validates the full autonomous lifecycle:
-1. Natural language task goal decomposition & planning (nl-dsl-sh)
+Validates these shell pipeline boundaries:
+1. Exact natural-language catalog aliases (nl-dsl-sh)
 2. Deterministic compilation into verifiable scripts
-3. Hermetic Paxlet packaging & cryptographic manifest verification (paxlet)
-4. Isolated execution with cryptographic receipt generation (receipt.json)
-5. Fail-closed security against tampering, unauthorized operations, and broken DAG dependencies.
+3. Paxlet package structure and content digests
+4. Subprocess execution and receipt content (Docker supplies OS isolation)
+5. Digest mismatch rejection, workspace IDs, and build/run separation.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -89,7 +90,7 @@ class TestTaskandPaxletAutonomyE2E(unittest.TestCase):
             self.assertTrue(digest.startswith("sha256:"))
 
     def test_02_paxlet_isolated_execution_and_receipt(self):
-        """Paxlet execution -> exit code 0 + cryptographic receipt verification."""
+        """Verify receipt fields and input/output hashes; receipts are not signed."""
         from paxlet.runtime import run_action
         from app.shell_workflow import export_package
 
@@ -126,6 +127,10 @@ class TestTaskandPaxletAutonomyE2E(unittest.TestCase):
             self.assertEqual(receipt["package_digest"], digest)
             self.assertEqual(receipt["exit_code"], 0)
             self.assertTrue(Path(receipt_path).is_file())
+            from paxlet.receipt import value_digest
+            self.assertEqual(receipt["input_digest"], value_digest({"stdin": ""}))
+            self.assertEqual(receipt["output_digest"], value_digest(output))
+            self.assertEqual(json.loads(Path(receipt_path).read_text()), receipt)
 
     def test_03_fail_closed_tampering_protection(self):
         """Tampering with packaged files must block execution via digest verification."""
@@ -160,23 +165,35 @@ class TestTaskandPaxletAutonomyE2E(unittest.TestCase):
             self.assertIn("digest mismatch", str(ctx.exception).lower())
 
             # 2. Tampering with code on disk without updating manifest must fail verification
-            code_file = next(pkg_dir.glob("steps/*.py"), None)
-            if code_file:
-                code_file.write_text("print('MALICIOUS_PAYLOAD')\n", encoding="utf-8")
-                with self.assertRaises(ValueError):
-                    run_package(pkg_dir, expected_digest=original_digest)
+            code_file = pkg_dir / "task.py"
+            self.assertTrue(code_file.is_file(), "Exporter changed: update the tampering fixture")
+            code_file.write_text("print('MALICIOUS_PAYLOAD')\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                run_package(pkg_dir, expected_digest=original_digest)
+            self.assertFalse((pkg_dir / ".paxlet/receipts").exists())
 
     def test_04_cli_routing_and_workspace_confinement(self):
         """Universal Taskand CLI 'taskand shell' subcommands execution."""
         taskand_bin = TASKAND_ROOT / "bin/taskand"
         if not taskand_bin.is_file():
-            self.skipTest("taskand bin not found")
+            self.fail("taskand bin not found; set TASKAND_ROOT")
 
-        python_bin = str(SHELL_VENV_PYTHON) if SHELL_VENV_PYTHON.is_file() else sys.executable
+        python_bin = os.environ.get("TASKAND_SHELL_PYTHON", sys.executable)
 
         with tempfile.TemporaryDirectory(prefix="taskand-cli-test-") as tmpdir:
+            # CLI audit state is rooted beside its executable, with no environment
+            # override. Copy only source inputs so tests cannot touch host .env/log.
+            isolated = Path(tmpdir) / "taskand"
+            isolated.mkdir()
+            for name in ("bin", "operations", "generated", "app", "gateway"):
+                shutil.copytree(TASKAND_ROOT / name, isolated / name,
+                                ignore=shutil.ignore_patterns(".*", "__pycache__", "*.pyc"))
+            shutil.copyfile(TASKAND_ROOT / "genome.yaml", isolated / "genome.yaml")
+            taskand_bin = isolated / "bin/taskand"
             env = {
-                **os.environ,
+                "PATH": os.environ["PATH"],
+                "HOME": tmpdir,
+                "PYTHONDONTWRITEBYTECODE": "1",
                 "TASKAND_GATEWAY": "http://127.0.0.1:9",
                 "TASKAND_SHELL_WORKSPACE": tmpdir,
                 "TASKAND_SHELL_PYTHON": python_bin,
@@ -197,6 +214,7 @@ class TestTaskandPaxletAutonomyE2E(unittest.TestCase):
             res = subprocess.run(
                 ["node", str(taskand_bin), "shell", "export", export_payload, "--json"],
                 capture_output=True,
+                timeout=20,
                 text=True,
                 env=env,
             )
@@ -209,6 +227,7 @@ class TestTaskandPaxletAutonomyE2E(unittest.TestCase):
             res = subprocess.run(
                 ["node", str(taskand_bin), "shell", "verify", json.dumps({"id": "cli-test"}), "--json"],
                 capture_output=True,
+                timeout=20,
                 text=True,
                 env=env,
             )
@@ -220,6 +239,7 @@ class TestTaskandPaxletAutonomyE2E(unittest.TestCase):
             res = subprocess.run(
                 ["node", str(taskand_bin), "shell", "run", json.dumps({"id": "cli-test", "expected_digest": digest}), "--json"],
                 capture_output=True,
+                timeout=20,
                 text=True,
                 env=env,
             )
@@ -227,19 +247,51 @@ class TestTaskandPaxletAutonomyE2E(unittest.TestCase):
             run_data = json.loads(res.stdout)
             self.assertIn("CLI_E2E_OK", run_data["result"]["output"]["stdout"])
 
+    def test_nonzero_step_stops_dependencies_and_records_failure(self):
+        from app.shell_workflow import export_package, run_package
+        from paxlet.errors import RuntimeError as PaxletRuntimeError
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "pkg"
+            plan = {"steps": [
+                {"id": "fail", "kind": "generate", "language": "python", "code": "raise SystemExit(7)\n"},
+                {"id": "after", "kind": "generate", "language": "python", "needs": ["fail"],
+                 "code": "from pathlib import Path\nPath('SHOULD_NOT_EXIST').write_text('ran')\n"},
+            ]}
+            exported = export_package(plan, package, urn="urn:paxlet:test:failure", permissions={})
+            with self.assertRaises(PaxletRuntimeError):
+                run_package(package, expected_digest=exported["digest"], timeout=5)
+            self.assertFalse((package / "SHOULD_NOT_EXIST").exists())
+            receipts = list((package / ".paxlet/receipts").glob("*.json"))
+            self.assertEqual(len(receipts), 1)
+            receipt = json.loads(receipts[0].read_text())
+            self.assertEqual(receipt["exit_code"], 7)
+            self.assertIsNone(receipt["output_digest"])
+
+    def test_workspace_confinement(self):
+        from app.shell_workflow import process_request
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"TASKAND_SHELL_WORKSPACE": tmp}):
+            for identifier in ("../escape", "/tmp/escape", "a/b", "", "a" * 65):
+                with self.subTest(identifier=identifier), self.assertRaises(ValueError):
+                    process_request("verify", {"id": identifier})
+            (Path(tmp) / "packages").symlink_to(Path(tmp), target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "symlinks"):
+                process_request("verify", {"id": "escape"})
+
     def test_05_mcp_process_uri_separation(self):
         """Separate shell-build and shell-run process runners enforce least privilege."""
         build_bin = TASKAND_ROOT / "generated/mcp/shell-build/taskand.dev/v1/bin.mjs"
         run_bin = TASKAND_ROOT / "generated/mcp/shell-run/taskand.dev/v1/bin.mjs"
 
         if not (build_bin.is_file() and run_bin.is_file()):
-            self.skipTest("MCP process runners not generated")
+            self.fail("MCP process runners not generated")
 
         # shell-build must reject 'run' operation
         res = subprocess.run(
             ["node", str(build_bin)],
             input=json.dumps({"operation": "run", "id": "any"}),
             capture_output=True,
+            timeout=20,
             text=True,
         )
         self.assertEqual(res.returncode, 0)
@@ -252,6 +304,7 @@ class TestTaskandPaxletAutonomyE2E(unittest.TestCase):
             ["node", str(run_bin)],
             input=json.dumps({"operation": "export", "id": "any"}),
             capture_output=True,
+            timeout=20,
             text=True,
         )
         self.assertEqual(res.returncode, 0)
