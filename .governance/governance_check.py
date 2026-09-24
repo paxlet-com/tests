@@ -26,7 +26,7 @@ _previous_bytecode_policy = sys.dont_write_bytecode
 sys.dont_write_bytecode = True
 try:
     try:
-        from ticket_activity import ActivityError, resolve as resolve_ticket_activity
+        from ticket_activity import ActivityError, delivery_landed, resolve as resolve_ticket_activity
     except ModuleNotFoundError:
         _activity_spec = importlib.util.spec_from_file_location(
             "ticket_activity", Path(__file__).with_name("ticket_activity.py")
@@ -37,6 +37,7 @@ try:
         sys.modules[_activity_spec.name] = _activity_module
         _activity_spec.loader.exec_module(_activity_module)
         ActivityError = _activity_module.ActivityError
+        delivery_landed = _activity_module.delivery_landed
         resolve_ticket_activity = _activity_module.resolve
 finally:
     sys.dont_write_bytecode = _previous_bytecode_policy
@@ -4287,7 +4288,27 @@ def resolve_validation_base(
         return supplied_base
     active = active_records if active_records is not None else active_ticket_records(root, config, records)
     adoption_records = standard_adoption_records(active)
-    deliveries = [record.intent["delivery"] for record in adoption_records if record.intent is not None]
+    # If an adoption ticket's delivery is already landed on its target branch,
+    # its prose status remains active only because terminal receipts were not recorded.
+    # Exclude landed adoptions so subsequent tickets do not have their validation base poisoned.
+    unlanded_adoptions = []
+    for record in adoption_records:
+        if record.intent is None:
+            continue
+        delivery = record.intent.get("delivery")
+        if not isinstance(delivery, dict):
+            continue
+        ticket_dir = getattr(record, "directory", None)
+        target_branch = delivery.get("targetBranch")
+        if ticket_dir is not None and target_branch:
+            target_ref = f"refs/remotes/origin/{target_branch}"
+            try:
+                if delivery_landed(root, ticket_dir, target_ref):
+                    continue
+            except Exception:
+                pass
+        unlanded_adoptions.append(record)
+    deliveries = [record.intent["delivery"] for record in unlanded_adoptions if record.intent is not None]
     if not deliveries:
         return None
     # Fresh published clones retain historical adoption prose but not external
