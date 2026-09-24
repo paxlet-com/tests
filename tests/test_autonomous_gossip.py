@@ -42,6 +42,16 @@ class TestTaskandAutonomousGossip(unittest.TestCase):
 
     BEACON_URI = "proc://taskand.dev/cluster/autonomous-beacon/v1"
 
+    @classmethod
+    def setUpClass(cls):
+        res = subprocess.run(
+            ["docker", "ps", "--filter", "name=taskand-node1", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+        )
+        if "taskand-node1" not in res.stdout:
+            raise unittest.SkipTest("Taskand cluster containers offline. Run tests/run_cluster_test.sh")
+
     def test_01_gossip_service_active_on_all_nodes(self):
         """Verifies that all 3 cluster nodes have the background gossip service active."""
         ports = {"taskand-node1": 8071, "taskand-node2": 8072, "taskand-node3": 8073}

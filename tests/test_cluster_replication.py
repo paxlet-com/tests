@@ -21,6 +21,16 @@ def run_docker_exec(container: str, cmd: str) -> tuple[int, str, str]:
 class TestTaskandClusterReplication(unittest.TestCase):
     """Validates SSH connectivity, operator-gated replication policy, and autonomous registry sync."""
 
+    @classmethod
+    def setUpClass(cls):
+        res = subprocess.run(
+            ["docker", "ps", "--filter", "name=taskand-node1", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+        )
+        if "taskand-node1" not in res.stdout:
+            raise unittest.SkipTest("Taskand cluster containers offline. Run tests/run_cluster_test.sh")
+
     def test_01_cluster_containers_and_ssh_connectivity(self):
         """Verifies all 3 containers are online and can communicate via passwordless SSH."""
         for target in ["172.30.0.12", "172.30.0.13"]:

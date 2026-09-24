@@ -1,0 +1,74 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-006",
+  "summary": "Harden autonomy outcome tests and bounded live repair diagnostics",
+  "workstream": "application",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-006/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "tests/**"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "726f60e6cdb5daff7720045a87dfdcb8589e21ab",
+    "targetBranch": "main",
+    "outcome": "Publish reliable separated test runners and bounded live repair measurements; diagnose actual generated-code failures and preserve outcomes.",
+    "nonGoals": [
+      "Production gateway changes",
+      "Protected review configuration changes"
+    ],
+    "complexity": "L",
+    "estimatedMinutes": 90,
+    "budgets": {
+      "maxImplementationFiles": 15,
+      "maxAffectedComponents": 5,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Select explicit local suites; inject deterministic failure fixtures; instrument live model responses, parser diagnostics, bounded repair, complete token accounting and independently verified offline Docker outcomes.",
+      "components": [
+        {
+          "name": "tests",
+          "paths": [
+            "tests/**"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Remove disposable test containers; retain prior main and source packages unchanged."
+    },
+    "validation": [
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "bash tests/run_e2e.sh local",
+          "bash tests/run_e2e.sh docker",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "Negative outcome and repair-budget regression tests, isolated container tests, bounded live probe artifacts."
+      }
+    ],
+    "runtimeDependencies": []
+  }
+}
