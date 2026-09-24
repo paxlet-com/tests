@@ -150,8 +150,9 @@ class ClusterReplicationTests(unittest.TestCase):
         control('b', 'start')
         before = self.arrived('b', 'candidate')
         self.assertEqual(before['archive_sha256'], source['archive_sha256'])
+        test_read_credential = credential('a', 'read')
         for _ in range(2):
-            status, pulled = registry('b', 'pull', peer=SEED, token=credential('a', 'read'),
+            status, pulled = registry('b', 'pull', peer=SEED, token=test_read_credential,
                                       uris=[source['uri']], expected={source['uri']: source['hash']})
             self.assertEqual(status, 200)
             self.assertEqual(pulled['report'][0]['result'], 'same')

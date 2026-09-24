@@ -18,23 +18,24 @@ export RUN_ID REPORT_DIR
 cleanup() {
   code=$?
   trap - EXIT INT TERM
-  set +e
-  "${COMPOSE[@]}" logs --no-color > "$REPORT_DIR/containers.log" 2>&1
+  log_failures=0
+  "${COMPOSE[@]}" logs --no-color > "$REPORT_DIR/containers.log" 2>&1 || log_failures=$((log_failures + 1))
   for node in node-a node-b node-c; do
-    "${COMPOSE[@]}" exec -T "$node" python3 -c 'from pathlib import Path; p=Path("/tmp/cluster-node/log/gateway.log"); print(p.read_text()[-16384:] if p.exists() else "Gateway log absent")' > "$REPORT_DIR/$node-gateway.log" 2>&1
+    "${COMPOSE[@]}" exec -T "$node" python3 -c 'from pathlib import Path; p=Path("/tmp/cluster-node/log/gateway.log"); print(p.read_text()[-16384:] if p.exists() else "Gateway log absent")' > "$REPORT_DIR/$node-gateway.log" 2>&1 || log_failures=$((log_failures + 1))
   done
-  "${COMPOSE[@]}" down --volumes --remove-orphans --timeout 10 > "$REPORT_DIR/cleanup.log" 2>&1
-  cleanup_code=$?
-  docker image rm "$CLUSTER_IMAGE" >> "$REPORT_DIR/cleanup.log" 2>&1
-  remaining="$(docker ps -aq --filter "label=com.docker.compose.project=$RUN_ID")"
+  cleanup_code=0
+  "${COMPOSE[@]}" down --volumes --remove-orphans --timeout 10 > "$REPORT_DIR/cleanup.log" 2>&1 || cleanup_code=$?
+  docker image rm "$CLUSTER_IMAGE" >> "$REPORT_DIR/cleanup.log" 2>&1 || code=1
+  remaining="$(docker ps -aq --filter "label=com.docker.compose.project=$RUN_ID")" || code=1
   [[ "$cleanup_code" == 0 && -z "$remaining" ]] || code=1
-  rm -rf -- "$AUTONOMY_BUILD_CONTEXT"
-  python3 - "$code" "$cleanup_code" <<'PY'
+  rm -rf -- "$AUTONOMY_BUILD_CONTEXT" || code=1
+  python3 - "$code" "$cleanup_code" "$log_failures" <<'PY' || code=1
 import json, os, sys
 from pathlib import Path
 p=Path(os.environ['REPORT_DIR'])
 (p/'run.json').write_text(json.dumps({'project':os.environ['RUN_ID'],'exitCode':int(sys.argv[1]),
-    'cleanupExitCode':int(sys.argv[2]),'sources':'source-inventory.json','testLog':'tests.log'},indent=2)+'\n')
+    'cleanupExitCode':int(sys.argv[2]),'logFailures':int(sys.argv[3]),
+    'sources':'source-inventory.json','testLog':'tests.log'},indent=2)+'\n')
 PY
   echo "Cluster report: $REPORT_DIR (exit $code)"
   exit "$code"

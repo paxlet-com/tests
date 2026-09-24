@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 from pathlib import Path
 import stat
 import subprocess
@@ -13,7 +14,51 @@ from live_observation import ObservedClient, RepeatedResponse, unwrap_response
 from nl_dsl_sh import Engine, LLMConfig
 from paxlet.receipt import value_digest
 
-CONFIG = LLMConfig(model='test/model', api_key='test-placeholder-credential')
+
+class CleanupPolicyTest(unittest.TestCase):
+    def test_cleanup_preserves_failure_and_checks_resource_removal(self):
+        text = Path(__file__).with_name('run_cluster_test.sh').read_text()
+        cleanup = 'cleanup() {' + text.split('cleanup() {', 1)[1].split('\ntrap cleanup EXIT', 1)[0]
+        cases = [(0, '', '', 0), (7, '', '', 7), (7, 'compose logs', '', 7),
+                 (0, 'compose logs', '', 0), (0, 'compose down', '', 1),
+                 (0, 'image rm', '', 1), (0, 'ps -aq', '', 1), (0, '', 'remaining', 1)]
+        for initial, failure, remaining, expected in cases:
+            with self.subTest(initial=initial, failure=failure, remaining=remaining), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                report = root / 'report'
+                report.mkdir()
+                context = root / 'context'
+                context.mkdir()
+                fake = root / 'docker'
+                fake.write_text('''#!/usr/bin/env python3
+import os, sys
+from pathlib import Path
+command = ' '.join(sys.argv[1:3])
+with Path(os.environ['CALL_LOG']).open('a') as log:
+    log.write(command + '\\n')
+if command == os.environ['FAIL_COMMAND']:
+    sys.exit(9)
+if command == 'ps -aq':
+    print(os.environ['REMAINING'])
+''')
+                fake.chmod(0o700)
+                env = {**os.environ, 'PATH': str(root) + os.pathsep + os.environ['PATH'],
+                       'REPORT_DIR': str(report), 'AUTONOMY_BUILD_CONTEXT': str(context),
+                       'CALL_LOG': str(root / 'calls'), 'FAIL_COMMAND': failure,
+                       'REMAINING': remaining}
+                script = ('set -euo pipefail\nCOMPOSE=(docker compose)\n'
+                          'CLUSTER_IMAGE=fixture\nRUN_ID=cleanup-policy\nexport RUN_ID REPORT_DIR\n'
+                          + cleanup + '\ntrap cleanup EXIT\nexit ' + str(initial))
+                result = subprocess.run(['bash', '-c', script], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, expected, result.stderr)
+                receipt = json.loads((report / 'run.json').read_text())
+                self.assertEqual(receipt['exitCode'], expected)
+                self.assertEqual(receipt['cleanupExitCode'], 9 if failure == 'compose down' else 0)
+                self.assertIn('compose down', (root / 'calls').read_text())
+                self.assertIn('image rm', (root / 'calls').read_text())
+                self.assertFalse(context.exists())
+
+CONFIG = LLMConfig(model='test/model', api_key='placeholder_autonomy_test')
 
 
 def plan(code="import json\nprint(json.dumps([2,2,7,9]))\n"):
