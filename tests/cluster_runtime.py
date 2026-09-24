@@ -113,7 +113,8 @@ class Node:
             '\n    role: user\n    allowed_uris:\n      - ' + REGISTRY +
             '\n      - proc://taskand.dev/cluster/*\n    allowed_actions:\n      - read\n')
         self.env = {'PATH': os.environ['PATH'], 'HOME': '/tmp', 'PYTHONPATH': str(ROOT),
-                    'PYTHONDONTWRITEBYTECODE': '1', 'TASKAND_NODE': 'node-' + self.node,
+                    'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONUNBUFFERED': '1',
+                    'TASKAND_NODE': 'node-' + self.node,
                     'TASKAND_BIND': '0.0.0.0', 'TASKAND_AUTH_TOKEN': credential(self.node, 'admin'),
                     'TASKAND_GOSSIP_ENABLED': '1', 'TASKAND_GOSSIP_INTERVAL': '0.4',
                     'TASKAND_GOSSIP_AUTO_APPROVE': os.environ.get('CLUSTER_AUTO_APPROVE', '0'),

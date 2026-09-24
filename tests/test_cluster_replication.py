@@ -154,7 +154,7 @@ class ClusterReplicationTests(unittest.TestCase):
         for _ in range(2):
             status, pulled = registry('b', 'pull', peer=SEED, token=test_read_credential,
                                       uris=[source['uri']], expected={source['uri']: source['hash']})
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 200, pulled)
             self.assertEqual(pulled['report'][0]['result'], 'same')
         after = self.observation('b')
         self.assertEqual(after['mtime_ns'], before['mtime_ns'])
