@@ -106,7 +106,8 @@ jobs:
         run: |
           set -euo pipefail
           standard_version="$(python3 -c 'import json; print(json.load(open(".governance/manifest.json", encoding="utf-8"))["standard"]["version"])')"
-          python3 -m pip install --disable-pip-version-check "wellman==${standard_version}"
+          runtime_ref="wellman-v${standard_version}"
+          python3 -m pip install --disable-pip-version-check "git+https://github.com/wellmanifest/new-project.git@${runtime_ref}#subdirectory=packages/wellman"
           wellman --version
       - name: Run the managed governance gate
         shell: bash
@@ -115,8 +116,12 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          wellman check --root . --json
-          python3 .governance/standard_pack_check.py --root . --strict --format json
+          # CI has no local clone hook; checks bound to a developer clone are
+          # skipped for the ci actor, exactly as for governance_check.py below.
+          wellman check --root . --actor ci --json
+          # The adopter's standard-adoption.json mode decides: "enforce" fails on
+          # missing packs, "audit" reports them without failing the gate.
+          python3 .governance/standard_pack_check.py --root . --format json
           arguments=(--root . --manifest .governance/manifest.json
             --lock .governance/manifest.lock.json
             --stack-profiles .governance/stack-profiles.json --actor ci)
