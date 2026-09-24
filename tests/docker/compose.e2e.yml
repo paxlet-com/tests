@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  taskand-gateway:
+    image: python:3.12-alpine
+    command: sh -c "apk add --no-cache nodejs curl && python3 /app/server.py"
+    environment:
+      - TASKAND_BIND=0.0.0.0
+      - TASKAND_AUTH_TOKEN=test-token
+    volumes:
+      - ${TASKAND_ROOT:-../../taskand}/gateway.py:/app/server.py:ro
+      - ${TASKAND_ROOT:-../../taskand}/gateway:/app/gateway:ro
+      - ${TASKAND_ROOT:-../../taskand}/genome.yaml:/taskand/genome.yaml:ro
+      - ${TASKAND_ROOT:-../../taskand}/generated:/taskand/generated:ro
+    ports:
+      - "8077:8077"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8077/healthz || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 2s
+
+  autonomy-e2e-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    environment:
+      - TASKAND_GATEWAY=http://taskand-gateway:8077
+      - TASKAND_AUTH_TOKEN=test-token
+      - TASKAND_ROOT=/workspace/taskand
+    volumes:
+      - ${TASKAND_ROOT:-../../taskand}:/workspace/taskand:ro
+      - ${PAXLET_ROOT:-../../paxlet}:/workspace/paxlet:ro
+      - ${NL_DSL_SH_ROOT:-../../nl-dsl-sh}:/workspace/nl-dsl-sh:ro
+      - ../:/workspace/tests:ro
+    depends_on:
+      taskand-gateway:
+        condition: service_healthy
