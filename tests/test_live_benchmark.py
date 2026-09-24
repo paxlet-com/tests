@@ -25,6 +25,7 @@ class PeerBackpressureTest(unittest.TestCase):
             status, result, attempts = retry_catalog_busy(operation)
         self.assertEqual((status, result), (200, done))
         self.assertEqual([a['status'] for a in attempts], [503, 200])
+        self.assertTrue(all(a['elapsed_ms'] >= 0 for a in attempts))
         self.assertEqual(operation.call_count, 2)
         sleep.assert_called_once_with(0.25)
 
@@ -32,11 +33,13 @@ class PeerBackpressureTest(unittest.TestCase):
         from cluster_runtime import retry_catalog_busy
         busy = {'ok': False, 'errorType': 'BUSY', 'retryable': True}
         operation = Mock(return_value=(503, busy))
-        with patch('cluster_runtime.time.sleep'):
+        with patch('cluster_runtime.time.sleep') as sleep:
             status, result, attempts = retry_catalog_busy(operation)
         self.assertEqual((status, result), (503, busy))
-        self.assertEqual(len(attempts), 4)
-        self.assertEqual(operation.call_count, 4)
+        self.assertEqual(len(attempts), 7)
+        self.assertEqual(operation.call_count, 7)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list],
+                         [0.25, 0.5, 0.75, 1.0, 1.25, 1.5])
         for response in [(502, {'ok': False, 'errorType': 'REGISTRY_ERROR'}),
                          (503, {'ok': False, 'errorType': 'BUSY'}),
                          (403, busy), (504, {'ok': False, 'errorType': 'OUTCOME_UNKNOWN'}),

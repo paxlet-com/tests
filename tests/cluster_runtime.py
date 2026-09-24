@@ -71,14 +71,16 @@ def wait_for(probe, *, seconds=30, description='condition'):
 
 
 def retry_catalog_busy(operation):
-    """At most four bounded HTTP calls; only explicit catalog BUSY is retryable."""
+    """At most seven calls and 5.25 s of backoff; only explicit BUSY is retryable."""
     attempts = []
-    for attempt in range(4):
+    started = time.monotonic()
+    for attempt in range(7):
         status, result = operation()
-        attempts.append({'status': status, 'errorType': result.get('errorType')})
+        attempts.append({'status': status, 'errorType': result.get('errorType'),
+                         'elapsed_ms': round((time.monotonic() - started) * 1000, 1)})
         busy = (status == 503 and result.get('ok') is False
                 and result.get('errorType') == 'BUSY' and result.get('retryable') is True)
-        if not busy or attempt == 3:
+        if not busy or attempt == 6:
             return status, result, attempts
         time.sleep(0.25 * (attempt + 1))
 
