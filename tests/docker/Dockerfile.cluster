@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-server \
+    openssh-client \
+    rsync \
+    curl \
+    nodejs \
+    npm \
+    procps \
+    iproute2 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# SSH daemon configuration
+RUN mkdir -p /var/run/sshd /root/.ssh && \
+    chmod 700 /root/.ssh && \
+    ssh-keygen -A && \
+    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
+    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config && \
+    echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config && \
+    echo "UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config
+
+# Generate pre-authorized cluster ed25519 keypair
+RUN ssh-keygen -t ed25519 -N "" -f /root/.ssh/id_ed25519 && \
+    cp /root/.ssh/id_ed25519.pub /root/.ssh/authorized_keys && \
+    chmod 600 /root/.ssh/id_ed25519 /root/.ssh/authorized_keys
+
+WORKDIR /opt/taskand
+
+COPY tests/docker/entrypoint.cluster.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 22 8077
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

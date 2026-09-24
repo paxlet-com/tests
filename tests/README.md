@@ -47,3 +47,20 @@ prompts do not establish general reliability or capacity.
 Paxlet permission fields are declarations, not an OS sandbox. Receipts contain
 input/output hashes; these tests do not claim signatures or immutability.
 Local mode runs only fixed test-authored programs; use Docker for isolation.
+
+## 3-Node Cluster Mesh and Replication Test
+
+Verifies Taskand cluster capabilities across 3 independent container nodes (`taskand-node1`, `taskand-node2`, `taskand-node3`) connected via SSH and REST/HTTP federation:
+
+```bash
+bash tests/run_cluster_test.sh
+```
+
+### Key architectural findings:
+1. **SSH Node Provisioning (`taskand occupy`)**:
+   - By design, `taskand occupy` without `--run` is strictly an operator dry-run plan.
+   - Autonomous organisms cannot perform uncontrolled SSH replication (self-spreading/worms) because `doctor` diagnoses `PEER_DOWN` with `executor: "human"`, requiring explicit human operator intervention.
+2. **Autonomous Inter-Node Communication & Registry Sync**:
+   - Nodes monitor peer health and catalog manifests via `proc://taskand.dev/cluster/monitor/v1` and `/.well-known/catalog.json`.
+   - When a peer exports a new package, nodes detect `PEER_NEW_PACKAGES` and autonomously pull it over HTTP, verify its SHA-256 package hash, install files into the local `generated/` directory, and register the package with status `candidate` (or `active` if configured).
+
