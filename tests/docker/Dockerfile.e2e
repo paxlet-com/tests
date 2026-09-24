@@ -10,4 +10,4 @@ COPY source-inventory.json /workspace/source-inventory.json
 WORKDIR /workspace
 ENV PYTHONPATH=/workspace/taskand:/workspace/tests PYTHONDONTWRITEBYTECODE=1
 ENTRYPOINT ["python"]
-CMD ["-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"]
+CMD ["tests/run_local.py"]

@@ -11,6 +11,12 @@ bash tests/run_e2e.sh docker
 bash tests/run_e2e.sh docker tests/benchmark_autonomy.py --repetitions 5
 ```
 
+Local and offline Docker runs explicitly select `test_autonomy_flow`,
+`test_live_benchmark`, and `test_doctor_policy`; they do not discover cluster
+suites, even when cluster containers happen to be running. The doctor check
+supplies a deterministic `PEER_DOWN` finding to the real prescription procedure
+and fails if human routing is missing.
+
 Local tests need Taskand's installed shell Python. Sibling repository paths are
 resolved from the registered primary checkout; overrides are `TASKAND_ROOT`,
 `PAXLET_ROOT`, `NL_DSL_SH_ROOT`, and `TASKAND_SHELL_PYTHON`.
@@ -29,7 +35,7 @@ and `scripted-repair` use test doubles; their timings measure local mechanisms,
 not a real LLM. Five refusal controls cover missing aliases, exhausted repairs,
 clarification, reuse-only violations and invalid DAGs. Failures affect exit status.
 
-Optional live probe (three paid provider calls maximum, no repair retries):
+Optional live probe (default: at most three model calls, no repair retries):
 
 ```bash
 PYTHONPATH="$TASKAND_ROOT:tests" "$TASKAND_SHELL_PYTHON" tests/benchmark_live.py \
@@ -41,34 +47,47 @@ PYTHONPATH="$TASKAND_ROOT:tests" "$TASKAND_SHELL_PYTHON" tests/benchmark_live.py
 The image must first be built by the Docker runner. The live probe resolves its
 immutable ID, plans on the host and runs each generated plan in a separate
 restricted container without provider credentials. It reports provider usage
-when available, latency, and independently checked outputs. Three simple
-prompts do not establish general reliability or capacity.
+for every attempt, latency, and independently checked outputs. Unknown usage
+is explicit and excluded from known token totals. Repeating a normalized
+response stops repair. A self-consistent receipt cannot make an incorrect
+answer pass: the output must match an independent expected result, and receipt
+identity, action, exit codes and input/output/package digests must agree.
+
+For providers that respond with a Markdown JSON block, opt in explicitly:
+
+```bash
+# Add these options to the command above (at most six calls across three tasks):
+--json-mode off --response-envelope json-fence --repair-attempts 1
+```
+
+This accepts exactly one whole-response JSON fence, preserves embedded code,
+and rejects extra prose or multiple fences. The default remains strict JSON.
+These options affect benchmark tooling, not the deployed gateway or upstream
+`nl-dsl-sh`. `--task sort` limits a probe to one task; `--repair-attempts` accepts
+0, 1 or 2. Reports require a fresh output path to preserve earlier failures.
+`--artifacts-dir /private/new-directory` explicitly retains original responses
+in new directories with mode 0700 and files with mode 0600; artifacts are absent
+by default. Provider exception messages and credentials are excluded from reports.
+
+Three simple prompts do not establish general reliability or capacity.
 
 Paxlet permission fields are declarations, not an OS sandbox. Receipts contain
 input/output hashes; these tests do not claim signatures or immutability.
 Local mode runs only fixed test-authored programs; use Docker for isolation.
 
-## 3-Node Cluster Mesh and Replication Test
+## Explicit three-node cluster tests
 
-Verifies Taskand cluster capabilities across 3 independent container nodes (`taskand-node1`, `taskand-node2`, `taskand-node3`) connected via SSH and REST/HTTP federation:
+`bash tests/run_cluster_test.sh` provisions the named cluster fixture and runs
+its suites. It rebuilds containers and removes fixture volumes; reserve that
+fixture before invoking it. Local/offline runs above do not invoke this script.
 
-```bash
-bash tests/run_cluster_test.sh
-```
+The cluster tests cover dry-run SSH provisioning, peer monitoring, package
+transfer and execution. `PEER_DOWN` requires human prescription in the supplied
+fixture; this is a routing assertion, not a proof against every replication path.
+The multi-node Paxlet test starts from a test-authored intermediate plan and
+executes on nodes sequentially. It does not measure live natural-language
+planning, concurrent execution, signed receipts or recovery under failure.
 
-### Key architectural findings:
-1. **SSH Node Provisioning (`taskand occupy`)**:
-   - By design, `taskand occupy` without `--run` is strictly an operator dry-run plan.
-   - Autonomous organisms cannot perform uncontrolled SSH replication (self-spreading/worms) because `doctor` diagnoses `PEER_DOWN` with `executor: "human"`, requiring explicit human operator intervention.
-2. **Autonomous Inter-Node Communication & Registry Sync**:
-   - Nodes monitor peer health and catalog manifests via `proc://taskand.dev/cluster/monitor/v1` and `/.well-known/catalog.json`.
-   - When a peer exports a new package, nodes detect `PEER_NEW_PACKAGES` and autonomously pull it over HTTP, verify its SHA-256 package hash, install files into the local `generated/` directory, and register the package with status `candidate` (or `active` if configured).
-3. **End-to-End NL-to-Paxlet Multi-Node Execution**:
-   - Compiles natural language intent or intermediate plan into a validated Paxlet package with cryptographic manifest and SHA-256 digest (`urn:paxlet:...`).
-   - Packages the bundle into a Taskand cluster procedure and broadcasts it across the mesh.
-   - Nodes autonomously pull the procedure, verify checksums, and execute concurrently, returning node-specific execution data and tamper-evident `.paxlet/receipts/` across all 3 nodes.
-4. **Autonomous Background Gossip & Continuous Replication Engine**:
-   - Background daemon engine in Taskand Gateway (`gateway/gossip.py`, `GET /api/cluster/gossip`) continuously discovers peers, exchanges catalog state, pulls missing packages, and auto-approves them.
-   - Requires zero operator intervention or manual trigger procedures to achieve eventual consistency across the entire cluster.
-
-
+Background gossip tests exercise discovery and replication under their configured
+test policy. Automatic approval depends on that configuration. Production rollout,
+convergence under faults, restarts and concurrent tasks require separate evidence.

@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import unittest
+
+from doctor_policy import PEER_DOWN_INPUT, assert_peer_down_human
 
 
 def run_docker_exec(container: str, cmd: str) -> tuple[int, str, str]:
@@ -13,6 +16,7 @@ def run_docker_exec(container: str, cmd: str) -> tuple[int, str, str]:
     res = subprocess.run(
         ["docker", "exec", container, "bash", "-c", cmd],
         capture_output=True,
+        timeout=90,
         text=True,
     )
     return res.returncode, res.stdout, res.stderr
@@ -26,6 +30,7 @@ class TestTaskandClusterReplication(unittest.TestCase):
         res = subprocess.run(
             ["docker", "ps", "--filter", "name=taskand-node1", "--format", "{{.Names}}"],
             capture_output=True,
+            timeout=90,
             text=True,
         )
         if "taskand-node1" not in res.stdout:
@@ -57,16 +62,14 @@ class TestTaskandClusterReplication(unittest.TestCase):
         self.assertIn("plan", data)
         self.assertTrue(any("ssh" in str(step) for step in data["plan"]))
 
-        # Doctor prescription test
-        code, out, _ = run_docker_exec(
+        # Inject the failure; an empty finding list must never pass this check.
+        payload = shlex.quote(json.dumps(PEER_DOWN_INPUT))
+        code, out, err = run_docker_exec(
             "taskand-node1",
-            "node /opt/taskand/generated/doctor/prescribe/taskand.dev/v1/bin.mjs",
+            f"printf '%s' {payload} | node /opt/taskand/generated/doctor/prescribe/taskand.dev/v1/bin.mjs",
         )
-        if code == 0 and out.strip():
-            rx_data = json.loads(out)
-            for p in rx_data.get("prescriptions", []):
-                if p.get("finding", {}).get("code") == "PEER_DOWN":
-                    self.assertEqual(p.get("executor"), "human", "PEER_DOWN must be assigned to human executor")
+        self.assertEqual(code, 0, err)
+        assert_peer_down_human(json.loads(out))
 
     def test_03_cluster_peer_mesh_monitoring(self):
         """Verifies that nodes register each other as peers and monitor cluster health."""
