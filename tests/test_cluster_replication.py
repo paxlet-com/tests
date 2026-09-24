@@ -8,7 +8,7 @@ import time
 import unittest
 import uuid
 
-from cluster_runtime import control, credential, request, wait_for, REGISTRY
+from cluster_runtime import control, credential, request, retry_catalog_busy, wait_for, REGISTRY
 
 SEED = 'http://node-a:8079'
 
@@ -152,8 +152,10 @@ class ClusterReplicationTests(unittest.TestCase):
         self.assertEqual(before['archive_sha256'], source['archive_sha256'])
         test_read_credential = credential('a', 'read')
         for _ in range(2):
-            status, pulled = registry('b', 'pull', peer=SEED, token=test_read_credential,
-                                      uris=[source['uri']], expected={source['uri']: source['hash']})
+            status, pulled, attempts = retry_catalog_busy(lambda: registry(
+                'b', 'pull', peer=SEED, token=test_read_credential,
+                uris=[source['uri']], expected={source['uri']: source['hash']}))
+            print('CLUSTER_REJOIN_ATTEMPTS ' + json.dumps(attempts), flush=True)
             if status != 200:
                 pulled = {'response': pulled, 'peer_requests': control('a', 'requests')['requests'][-10:]}
             self.assertEqual(status, 200, pulled)

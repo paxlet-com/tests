@@ -15,6 +15,40 @@ from nl_dsl_sh import Engine, LLMConfig
 from paxlet.receipt import value_digest
 
 
+class PeerBackpressureTest(unittest.TestCase):
+    def test_explicit_busy_recovers_with_visible_attempts(self):
+        from cluster_runtime import retry_catalog_busy
+        busy = {'ok': False, 'errorType': 'BUSY', 'retryable': True}
+        done = {'ok': True, 'report': [{'result': 'same'}]}
+        operation = Mock(side_effect=[(503, busy), (200, done)])
+        with patch('cluster_runtime.time.sleep') as sleep:
+            status, result, attempts = retry_catalog_busy(operation)
+        self.assertEqual((status, result), (200, done))
+        self.assertEqual([a['status'] for a in attempts], [503, 200])
+        self.assertEqual(operation.call_count, 2)
+        sleep.assert_called_once_with(0.25)
+
+    def test_persistent_busy_is_bounded_and_other_failures_are_not_retried(self):
+        from cluster_runtime import retry_catalog_busy
+        busy = {'ok': False, 'errorType': 'BUSY', 'retryable': True}
+        operation = Mock(return_value=(503, busy))
+        with patch('cluster_runtime.time.sleep'):
+            status, result, attempts = retry_catalog_busy(operation)
+        self.assertEqual((status, result), (503, busy))
+        self.assertEqual(len(attempts), 4)
+        self.assertEqual(operation.call_count, 4)
+        for response in [(502, {'ok': False, 'errorType': 'REGISTRY_ERROR'}),
+                         (503, {'ok': False, 'errorType': 'BUSY'}),
+                         (403, busy), (504, {'ok': False, 'errorType': 'OUTCOME_UNKNOWN'}),
+                         (200, {'ok': True, 'report': [{'result': 'rejected'}]})]:
+            with self.subTest(response=response), patch('cluster_runtime.time.sleep') as sleep:
+                operation = Mock(return_value=response)
+                status, result, attempts = retry_catalog_busy(operation)
+                self.assertEqual((status, result), response)
+                operation.assert_called_once()
+                sleep.assert_not_called()
+
+
 class CleanupPolicyTest(unittest.TestCase):
     def test_cleanup_preserves_failure_and_checks_resource_removal(self):
         text = Path(__file__).with_name('run_cluster_test.sh').read_text()

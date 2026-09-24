@@ -70,6 +70,19 @@ def wait_for(probe, *, seconds=30, description='condition'):
     raise AssertionError(f'{description} did not become true in {seconds}s (last={last!r})')
 
 
+def retry_catalog_busy(operation):
+    """At most four bounded HTTP calls; only explicit catalog BUSY is retryable."""
+    attempts = []
+    for attempt in range(4):
+        status, result = operation()
+        attempts.append({'status': status, 'errorType': result.get('errorType')})
+        busy = (status == 503 and result.get('ok') is False
+                and result.get('errorType') == 'BUSY' and result.get('retryable') is True)
+        if not busy or attempt == 3:
+            return status, result, attempts
+        time.sleep(0.25 * (attempt + 1))
+
+
 # The carrier invokes a transferred archive. It cannot regenerate the source plan.
 INVOKE = r'''
 import hashlib, json, os, sys, tempfile
