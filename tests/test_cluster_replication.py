@@ -156,6 +156,9 @@ class ClusterReplicationTests(unittest.TestCase):
                 'b', 'pull', peer=SEED, token=test_read_credential,
                 uris=[source['uri']], expected={source['uri']: source['hash']}))
             print('CLUSTER_REJOIN_ATTEMPTS ' + json.dumps(attempts), flush=True)
+            print('CLUSTER_REJOIN_METRIC ' + json.dumps({
+                'busy_responses': sum(a['errorType'] == 'BUSY' for a in attempts),
+                'elapsed_ms': attempts[-1]['elapsed_ms'], 'calls': len(attempts)}), flush=True)
             if status != 200:
                 pulled = {'response': pulled, 'peer_requests': control('a', 'requests')['requests'][-10:]}
             self.assertEqual(status, 200, pulled)

@@ -1,0 +1,34 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-009",
+  "summary": "Measure bounded cluster rejoin under transient catalog BUSY",
+  "workstream": "application",
+  "classification": {"kind": "BUG", "priority": "P1", "origin": "requested"},
+  "allowedPaths": ["project/ticket-009/**", "project/TICKETS.md", "tests/cluster_runtime.py", "tests/test_live_benchmark.py", "tests/test_cluster_replication.py"],
+  "forbiddenPaths": ["project/ticket-*/user-*.md"],
+  "stacks": [],
+  "dependsOn": ["ticket-007"],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "e082407cc3cdd2eeadc46846fff0d24d2ea25a12",
+    "targetBranch": "main",
+    "outcome": "A measured and still bounded client retry window for transient explicit catalog BUSY during three-node rejoin, retaining failures and cleanup evidence.",
+    "nonGoals": ["Changing Taskand gateway capacity or protocol", "Retrying generic HTTP failures or uncertain effects", "Erasing the observed 9/10 cluster run", "Production deployment or live-model calls"],
+    "complexity": "S",
+    "estimatedMinutes": 45,
+    "budgets": {"maxImplementationFiles": 5, "maxAffectedComponents": 2, "maxPublicInterfaceChanges": 0, "maxRuntimeDependencies": 0},
+    "architecture": {
+      "status": "accepted",
+      "decision": "Increase only the fixture client's explicit catalog BUSY retry budget from four to seven calls, with 5.25 seconds total scheduled backoff and per-attempt elapsed observations. Keep all other HTTP outcomes terminal. Preserve historical failed reports and full resource cleanup checks.",
+      "components": [{"name": "tests", "paths": ["tests/cluster_runtime.py", "tests/test_live_benchmark.py", "tests/test_cluster_replication.py"]}],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {"impact": "none", "states": [], "evidence": []},
+      "rollback": "Revert the test client change; preserve all recorded run reports."
+    },
+    "runtimeDependencies": [],
+    "validation": [{"criterion": "AC-03", "commands": ["python3 -m unittest discover -s tests -p test_live_benchmark.py", "bash tests/run_cluster_test.sh", "./project/governance-check.sh --base origin/main --head HEAD"], "evidence": "Exact-source cluster report with attempts and cleanup, focused peer-backpressure tests and governance"}]
+  }
+}
