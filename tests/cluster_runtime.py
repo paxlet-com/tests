@@ -269,9 +269,11 @@ def serve():
             bearer = self.headers.get('Authorization')
             role = 'none' if bearer is None else next((role for role in ('admin', 'read', 'control')
                 if bearer == 'Bearer ' + credential(node.node, role)), 'other')
-            node.requests.append({'method': self.command, 'path': self.path, 'credential': role})
+            observed = {'method': self.command, 'path': self.path, 'credential': role}
+            node.requests.append(observed)
             size = int(self.headers.get('Content-Length', 0))
             if size > 262144:
+                observed['status'] = 413
                 self.send_error(413)
                 return
             body = self.rfile.read(size) if self.command == 'POST' else None
@@ -280,6 +282,7 @@ def serve():
             if mode == 'slow':
                 time.sleep(0.5)
             if package and mode == 'redirect':
+                observed['status'] = 302
                 self.send_response(302)
                 self.send_header('Location', 'http://node-c:8079/redirect-capture')
                 self.send_header('Content-Length', '0')
@@ -296,6 +299,7 @@ def serve():
                     status, data = response.status, response.read(32 * 1024 * 1024)
             except OSError:
                 status, data = 502, b'{"ok":false}'
+            observed['status'] = status
             if package and mode == 'tampered' and status == 200:
                 value = json.loads(data)
                 value['result']['files']['bundle.paxlet.zip'] = base64.b64encode(b'changed archive').decode()
