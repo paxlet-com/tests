@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     iproute2 \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir pydantic python-dotenv
 
 # SSH daemon configuration
 RUN mkdir -p /var/run/sshd /root/.ssh && \
