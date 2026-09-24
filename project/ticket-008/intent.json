@@ -1,0 +1,99 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-008",
+  "summary": "Restore installable governance runtime through published standard adoption",
+  "workstream": "governance",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-008/**",
+    ".github/workflows/new-project-governance.yml",
+    ".governance/governance_check.py",
+    ".governance/manifest.base.json",
+    ".governance/manifest.json",
+    ".governance/manifest.lock.json",
+    "wellmanifest_governance.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "d70b630eb0f5c2ba4f504fefebd513e32cbee6a9",
+    "targetBranch": "main",
+    "outcome": "Restore installable, CI-compatible governance runtime by adopting published standard 0.20.50, preserving PR7 and all test source. Publish independently reviewed recovery.",
+    "nonGoals": [
+      "Protected publication grants or reviewer changes",
+      "Changes to ticket-007 implementation",
+      "Production deployment",
+      "Wellman producer consolidation"
+    ],
+    "complexity": "M",
+    "estimatedMinutes": 45,
+    "budgets": {
+      "maxImplementationFiles": 6,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Use canonical published immutable adoption generator at 42dce766825f35b2a97cf16c9bf72e80a4a0c2d3; preserve target manifest extensions. Install runtime through the upstream workflow, use CI actor and adopted standard-pack mode.",
+      "components": [
+        {
+          "name": "governance",
+          "paths": [
+            ".github/workflows/new-project-governance.yml",
+            ".governance/governance_check.py",
+            ".governance/manifest.base.json",
+            ".governance/manifest.json",
+            ".governance/manifest.lock.json",
+            "wellmanifest_governance.py"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert bounded adoption commit; retain old pins and PR7."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "create_adoption_lock.py --check at published SHA",
+          "clean environment runtime install and wellman --version"
+        ],
+        "evidence": "Canonical release, source and runtime identity."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "wellman check --root . --actor ci --json",
+          "python3 .governance/standard_pack_check.py --root . --format json",
+          "./project/governance-check.sh --base origin/main --head HEAD"
+        ],
+        "evidence": "CI-equivalent gates, hosted exact-head checks and existing local tests."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "protected independent publication and remote readback"
+        ],
+        "evidence": "Published PR and explicit merge state; no self approval."
+      }
+    ]
+  }
+}
