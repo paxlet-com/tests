@@ -17,7 +17,7 @@ case "$mode" in
     if [[ "$mode" == benchmark ]]; then
       exec "$PYTHON_EXEC" "$DIR/benchmark_autonomy.py" "$@"
     fi
-    exec "$PYTHON_EXEC" -m unittest discover -s "$DIR" -p 'test_*.py' -v
+    exec "$PYTHON_EXEC" "$DIR/run_local.py"
     ;;
   docker)
     export AUTONOMY_BUILD_CONTEXT="$(mktemp -d)"

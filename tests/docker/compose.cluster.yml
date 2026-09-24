@@ -1,102 +1,41 @@
-version: "3.9"
-
-networks:
-  cluster_net:
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.30.0.0/16
+x-runtime: &runtime
+  image: ${CLUSTER_IMAGE:?Use run_cluster_test.sh}
+  build:
+    context: ${AUTONOMY_BUILD_CONTEXT:?Use run_cluster_test.sh}
+    dockerfile: tests/docker/Dockerfile.e2e
+  read_only: true
+  user: "65534:65534"
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  mem_limit: 768m
+  cpus: 1.0
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+  networks: [cluster]
+  init: true
 
 services:
-  taskand-node1:
-    build:
-      context: ../..
-      dockerfile: tests/docker/Dockerfile.cluster
-    container_name: taskand-node1
-    hostname: taskand-node1
-    networks:
-      cluster_net:
-        ipv4_address: 172.30.0.11
-    ports:
-      - "8071:8077"
-      - "2221:22"
-    volumes:
-      - ${TASKAND_SOURCE_DIR:-/home/tom/github/paxlet-com/taskand}:/opt/taskand-template:ro
-      - ${PAXLET_SOURCE_DIR:-/home/tom/github/paxlet-com/paxlet}:/opt/paxlet:ro
-      - ${NL_DSL_SH_SOURCE_DIR:-/home/tom/github/paxlet-com/nl-dsl-sh}:/opt/nl-dsl-sh:ro
-      - node1_data:/opt/taskand
-    environment:
-      - TASKAND_NODE=node1
-      - TASKAND_BIND=0.0.0.0
-      - TASKAND_AUTH_TOKEN=test-cluster-auth-token
-      - AUTO_START_GATEWAY=1
-      - PYTHONPATH=/opt/paxlet:/opt/nl-dsl-sh/src:/opt/taskand
-      - TASKAND_SHELL_PYTHON=/usr/local/bin/python3
-      - TASKAND_GOSSIP_ENABLED=1
-      - TASKAND_GOSSIP_INTERVAL=2
-      - TASKAND_GOSSIP_AUTO_APPROVE=1
-      - TASKAND_PEERS=http://taskand-node1:8077,http://taskand-node2:8077,http://taskand-node3:8077
+  node-a:
+    <<: *runtime
+    hostname: node-a
+    command: [tests/cluster_runtime.py, serve]
+    environment: {CLUSTER_NODE: a, HOME: /tmp}
+  node-b:
+    <<: *runtime
+    hostname: node-b
+    command: [tests/cluster_runtime.py, serve]
+    environment: {CLUSTER_NODE: b, HOME: /tmp}
+  node-c:
+    <<: *runtime
+    hostname: node-c
+    command: [tests/cluster_runtime.py, serve]
+    environment: {CLUSTER_NODE: c, CLUSTER_AUTO_APPROVE: "1", HOME: /tmp}
+  runner:
+    <<: *runtime
+    command: [tests/test_cluster_replication.py]
+    environment: {CLUSTER_TEST_RUN: "1", HOME: /tmp}
 
-  taskand-node2:
-    build:
-      context: ../..
-      dockerfile: tests/docker/Dockerfile.cluster
-    container_name: taskand-node2
-    hostname: taskand-node2
-    networks:
-      cluster_net:
-        ipv4_address: 172.30.0.12
-    ports:
-      - "8072:8077"
-      - "2222:22"
-    volumes:
-      - ${TASKAND_SOURCE_DIR:-/home/tom/github/paxlet-com/taskand}:/opt/taskand-template:ro
-      - ${PAXLET_SOURCE_DIR:-/home/tom/github/paxlet-com/paxlet}:/opt/paxlet:ro
-      - ${NL_DSL_SH_SOURCE_DIR:-/home/tom/github/paxlet-com/nl-dsl-sh}:/opt/nl-dsl-sh:ro
-      - node2_data:/opt/taskand
-    environment:
-      - TASKAND_NODE=node2
-      - TASKAND_BIND=0.0.0.0
-      - TASKAND_AUTH_TOKEN=test-cluster-auth-token
-      - AUTO_START_GATEWAY=1
-      - PYTHONPATH=/opt/paxlet:/opt/nl-dsl-sh/src:/opt/taskand
-      - TASKAND_SHELL_PYTHON=/usr/local/bin/python3
-      - TASKAND_GOSSIP_ENABLED=1
-      - TASKAND_GOSSIP_INTERVAL=2
-      - TASKAND_GOSSIP_AUTO_APPROVE=1
-      - TASKAND_PEERS=http://taskand-node1:8077,http://taskand-node2:8077,http://taskand-node3:8077
-
-  taskand-node3:
-    build:
-      context: ../..
-      dockerfile: tests/docker/Dockerfile.cluster
-    container_name: taskand-node3
-    hostname: taskand-node3
-    networks:
-      cluster_net:
-        ipv4_address: 172.30.0.13
-    ports:
-      - "8073:8077"
-      - "2223:22"
-    volumes:
-      - ${TASKAND_SOURCE_DIR:-/home/tom/github/paxlet-com/taskand}:/opt/taskand-template:ro
-      - ${PAXLET_SOURCE_DIR:-/home/tom/github/paxlet-com/paxlet}:/opt/paxlet:ro
-      - ${NL_DSL_SH_SOURCE_DIR:-/home/tom/github/paxlet-com/nl-dsl-sh}:/opt/nl-dsl-sh:ro
-      - node3_data:/opt/taskand
-    environment:
-      - TASKAND_NODE=node3
-      - TASKAND_BIND=0.0.0.0
-      - TASKAND_AUTH_TOKEN=test-cluster-auth-token
-      - AUTO_START_GATEWAY=1
-      - PYTHONPATH=/opt/paxlet:/opt/nl-dsl-sh/src:/opt/taskand
-      - TASKAND_SHELL_PYTHON=/usr/local/bin/python3
-      - TASKAND_GOSSIP_ENABLED=1
-      - TASKAND_GOSSIP_INTERVAL=2
-      - TASKAND_GOSSIP_AUTO_APPROVE=1
-      - TASKAND_PEERS=http://taskand-node1:8077,http://taskand-node2:8077,http://taskand-node3:8077
-
-volumes:
-  node1_data:
-  node2_data:
-  node3_data:
+networks:
+  cluster:
+    internal: true
