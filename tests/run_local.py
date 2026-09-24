@@ -2,7 +2,7 @@
 import sys
 import unittest
 
-MODULES = ('test_autonomy_flow', 'test_live_benchmark', 'test_doctor_policy')
+MODULES = ('test_autonomy_flow', 'test_live_benchmark', 'test_doctor_policy', 'test_stage_docker')
 
 
 def suite():
