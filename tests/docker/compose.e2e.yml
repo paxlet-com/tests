@@ -1,39 +1,21 @@
-version: "3.8"
-
 services:
-  taskand-gateway:
-    image: python:3.12-alpine
-    command: sh -c "apk add --no-cache nodejs curl && python3 /app/server.py"
-    environment:
-      - TASKAND_BIND=0.0.0.0
-      - TASKAND_AUTH_TOKEN=test-token
-    volumes:
-      - ${TASKAND_ROOT:-../../taskand}/gateway.py:/app/server.py:ro
-      - ${TASKAND_ROOT:-../../taskand}/gateway:/app/gateway:ro
-      - ${TASKAND_ROOT:-../../taskand}/genome.yaml:/taskand/genome.yaml:ro
-      - ${TASKAND_ROOT:-../../taskand}/generated:/taskand/generated:ro
-    ports:
-      - "8077:8077"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8077/healthz || exit 1"]
-      interval: 2s
-      timeout: 2s
-      retries: 10
-      start_period: 2s
-
   autonomy-e2e-runner:
     build:
-      context: .
-      dockerfile: Dockerfile.e2e
+      context: ${AUTONOMY_BUILD_CONTEXT:?Use tests/run_e2e.sh docker to stage source inputs}
+      dockerfile: tests/docker/Dockerfile.e2e
+    network_mode: none
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 768m
+    cpus: 1.0
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=128m,mode=1777
     environment:
-      - TASKAND_GATEWAY=http://taskand-gateway:8077
-      - TASKAND_AUTH_TOKEN=test-token
-      - TASKAND_ROOT=/workspace/taskand
-    volumes:
-      - ${TASKAND_ROOT:-../../taskand}:/workspace/taskand:ro
-      - ${PAXLET_ROOT:-../../paxlet}:/workspace/paxlet:ro
-      - ${NL_DSL_SH_ROOT:-../../nl-dsl-sh}:/workspace/nl-dsl-sh:ro
-      - ../:/workspace/tests:ro
-    depends_on:
-      taskand-gateway:
-        condition: service_healthy
+      TASKAND_ROOT: /workspace/taskand
+      TASKAND_SHELL_PYTHON: /usr/local/bin/python
+      TASKAND_GATEWAY: http://127.0.0.1:9
+      PYTHONDONTWRITEBYTECODE: "1"
+      HOME: /tmp

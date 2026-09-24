@@ -1,0 +1,75 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-002",
+  "summary": "Measure autonomy effectiveness and harden E2E evidence",
+  "workstream": "application",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-002/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "tests/**"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "5cdb2895c792a045fdb85c7214e6f9019c69077f",
+    "targetBranch": "main",
+    "outcome": "Publish reproducible isolated autonomy tests and benchmark, with measured effectiveness and explicit limitations.",
+    "nonGoals": [
+      "Production gateway changes",
+      "Protected review configuration changes"
+    ],
+    "complexity": "M",
+    "estimatedMinutes": 90,
+    "budgets": {
+      "maxImplementationFiles": 9,
+      "maxAffectedComponents": 3,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Extend existing E2E suite; stage explicit source inputs into an unprivileged offline Docker runner; separate scripted mechanism measurements from live model quality.",
+      "components": [
+        {
+          "name": "tests",
+          "paths": [
+            "tests/**"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Remove disposable test containers; retain prior main and source packages unchanged."
+    },
+    "validation": [
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "bash tests/run_e2e.sh local",
+          "bash tests/run_e2e.sh docker",
+          "bash tests/run_e2e.sh benchmark",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "External raw measurements and check logs."
+      }
+    ],
+    "runtimeDependencies": []
+  }
+}
