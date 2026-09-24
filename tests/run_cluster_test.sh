@@ -1,50 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TESTS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPOSE_FILE="${TESTS_ROOT}/tests/docker/compose.cluster.yml"
-
-GIT_COMMON="$(git rev-parse --git-common-dir 2>/dev/null || echo "")"
-if [ -n "${GIT_COMMON}" ]; then
-    ECOSYSTEM_ROOT="$(cd "$(dirname "${GIT_COMMON}")/.." && pwd)"
-else
-    ECOSYSTEM_ROOT="$(cd "${TESTS_ROOT}/../.." && pwd)"
-fi
-
-export TASKAND_SOURCE_DIR="${TASKAND_SOURCE_DIR:-${ECOSYSTEM_ROOT}/taskand}"
-export PAXLET_SOURCE_DIR="${PAXLET_SOURCE_DIR:-${ECOSYSTEM_ROOT}/paxlet}"
-export NL_DSL_SH_SOURCE_DIR="${NL_DSL_SH_SOURCE_DIR:-${ECOSYSTEM_ROOT}/nl-dsl-sh}"
-
-echo "=== [1/4] Starting Taskand 3-Node Cluster (Pristine Volumes) ==="
-docker compose -f "${COMPOSE_FILE}" down -v >/dev/null 2>&1 || true
-docker compose -f "${COMPOSE_FILE}" up -d --build
-
-echo "=== [2/4] Waiting for Cluster Gateways to be Healthy ==="
-for port in 8071 8072 8073; do
-    echo -n "Waiting for node on port ${port}..."
-    READY=0
-    for i in $(seq 1 30); do
-        if curl -s -f "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1; then
-            READY=1
-            echo " OK"
-            break
-        fi
-        sleep 1
-    done
-    if [ "${READY}" -ne 1 ]; then
-        echo " FAILED (timeout)"
-        exit 1
-    fi
-done
-
-echo "=== [3/4] Running Cluster Mesh and Replication Test Suite ==="
-python3 "${TESTS_ROOT}/tests/test_cluster_replication.py"
-
-echo "=== [4/5] Running End-to-End NL to Paxlet Cluster Pipeline Test Suite ==="
-python3 "${TESTS_ROOT}/tests/test_nl_paxlet_cluster_pipeline.py"
-
-echo "=== [5/5] Running Autonomous Background Gossip & Continuous Replication Test Suite ==="
-python3 "${TESTS_ROOT}/tests/test_autonomous_gossip.py"
-
-echo "=== All Cluster Test Suites: PASSED ==="
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PRIMARY="$(git -C "$DIR" worktree list --porcelain | sed -n 's/^worktree //p' | head -1)"
+WORKSPACE_ROOT="$(dirname "$PRIMARY")"
+export TASKAND_ROOT="${TASKAND_ROOT:-$WORKSPACE_ROOT/taskand}"
+export PAXLET_ROOT="${PAXLET_ROOT:-$WORKSPACE_ROOT/paxlet}"
+export NL_DSL_SH_ROOT="${NL_DSL_SH_ROOT:-$WORKSPACE_ROOT/nl-dsl-sh}"
+export PYTHONDONTWRITEBYTECODE=1
+RUN_ID="paxlet-cluster-$(python3 -c 'import uuid; print(uuid.uuid4().hex[:12])')"
+export CLUSTER_IMAGE="$RUN_ID:fixture"
+COMPOSE=(docker compose -p "$RUN_ID" -f "$DIR/docker/compose.cluster.yml")
+REPORT_DIR="${CLUSTER_REPORT_DIR:-$(mktemp -d /tmp/paxlet-cluster-report.XXXXXXXX)}"
+mkdir -p "$REPORT_DIR"
+[[ ! -e "$REPORT_DIR/run.json" ]] || { echo 'Use a fresh report directory.' >&2; exit 2; }
+export AUTONOMY_BUILD_CONTEXT="$(mktemp -d)"
+export RUN_ID REPORT_DIR
+cleanup() {
+  code=$?
+  trap - EXIT INT TERM
+  set +e
+  "${COMPOSE[@]}" logs --no-color > "$REPORT_DIR/containers.log" 2>&1
+  for node in node-a node-b node-c; do
+    "${COMPOSE[@]}" exec -T "$node" python3 -c 'from pathlib import Path; p=Path("/tmp/cluster-node/log/gateway.log"); print(p.read_text()[-16384:] if p.exists() else "Gateway log absent")' > "$REPORT_DIR/$node-gateway.log" 2>&1
+  done
+  "${COMPOSE[@]}" down --volumes --remove-orphans --timeout 10 > "$REPORT_DIR/cleanup.log" 2>&1
+  cleanup_code=$?
+  docker image rm "$CLUSTER_IMAGE" >> "$REPORT_DIR/cleanup.log" 2>&1
+  remaining="$(docker ps -aq --filter "label=com.docker.compose.project=$RUN_ID")"
+  [[ "$cleanup_code" == 0 && -z "$remaining" ]] || code=1
+  rm -rf -- "$AUTONOMY_BUILD_CONTEXT"
+  python3 - "$code" "$cleanup_code" <<'PY'
+import json, os, sys
+from pathlib import Path
+p=Path(os.environ['REPORT_DIR'])
+(p/'run.json').write_text(json.dumps({'project':os.environ['RUN_ID'],'exitCode':int(sys.argv[1]),
+    'cleanupExitCode':int(sys.argv[2]),'sources':'source-inventory.json','testLog':'tests.log'},indent=2)+'\n')
+PY
+  echo "Cluster report: $REPORT_DIR (exit $code)"
+  exit "$code"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+python3 "$DIR/stage_docker.py" "$AUTONOMY_BUILD_CONTEXT"
+cp "$AUTONOMY_BUILD_CONTEXT/source-inventory.json" "$REPORT_DIR/"
+"${COMPOSE[@]}" config --quiet
+"${COMPOSE[@]}" build node-a > "$REPORT_DIR/build.log" 2>&1
+docker image inspect "$CLUSTER_IMAGE" --format '{{.Id}}' > "$REPORT_DIR/image-id.txt"
+"${COMPOSE[@]}" up -d --no-build node-a node-b node-c
+"${COMPOSE[@]}" run --rm --no-deps runner 2>&1 | tee "$REPORT_DIR/tests.log"

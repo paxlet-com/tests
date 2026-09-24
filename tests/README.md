@@ -21,8 +21,10 @@ Local tests need Taskand's installed shell Python. Sibling repository paths are
 resolved from the registered primary checkout; overrides are `TASKAND_ROOT`,
 `PAXLET_ROOT`, `NL_DSL_SH_ROOT`, and `TASKAND_SHELL_PYTHON`.
 
-Docker stages committed Taskand files and explicit local Paxlet/nl-dsl-sh package
-sources, recording their SHA-256 inventory. It never mounts whole checkouts or
+Docker stages committed Taskand/Paxlet files and records their Git revisions.
+A Git-backed nl-dsl-sh source is also pinned to its commit; a distributed source
+without Git uses an explicit package inventory pinned by SHA-256. Test sources
+include the reviewable working diff and have a separate file inventory. It never mounts whole checkouts or
 publishes ports. Dependency installation uses the network during the build;
 runtime uses no network, an unprivileged user, a read-only filesystem, temporary
 storage, dropped capabilities and CPU/memory/PID limits. Transitive dependency
@@ -77,17 +79,52 @@ Local mode runs only fixed test-authored programs; use Docker for isolation.
 
 ## Explicit three-node cluster tests
 
-`bash tests/run_cluster_test.sh` provisions the named cluster fixture and runs
-its suites. It rebuilds containers and removes fixture volumes; reserve that
-fixture before invoking it. Local/offline runs above do not invoke this script.
+Use source checkouts containing bounded Taskand gossip and the immutable Paxlet
+store. Their versions are development revisions; the report records exact input
+commits and content inventory rather than inferring support from a version label.
 
-The cluster tests cover dry-run SSH provisioning, peer monitoring, package
-transfer and execution. `PEER_DOWN` requires human prescription in the supplied
-fixture; this is a routing assertion, not a proof against every replication path.
-The multi-node Paxlet test starts from a test-authored intermediate plan and
-executes on nodes sequentially. It does not measure live natural-language
-planning, concurrent execution, signed receipts or recovery under failure.
+```bash
+TASKAND_ROOT=/path/to/taskand-checkout \
+PAXLET_ROOT=/path/to/paxlet-checkout \
+NL_DSL_SH_ROOT=/path/to/nl-dsl-sh \
+CLUSTER_REPORT_DIR=/tmp/new-cluster-report \
+  bash tests/run_cluster_test.sh
+```
 
-Background gossip tests exercise discovery and replication under their configured
-test policy. Automatic approval depends on that configuration. Production rollout,
-convergence under faults, restarts and concurrent tasks require separate evidence.
+Each invocation creates a unique Compose project and an internal Docker network,
+three real Taskand gateways and a test runner. No ports, host directories, Docker
+socket, SSH keys or persistent volumes are shared. Nodes run without root or
+capabilities, with read-only image filesystems and bounded temporary storage.
+The runner removes only its own project resources on success or failure. Image
+building requires network access; the cluster network has no external routing.
+
+The fixtures use distinct synthetic admin, peer-read and controller credentials.
+B accepts packages as candidates, C explicitly opts into automatic approval.
+Tests verify that a peer's read grant cannot trigger sync, approve or execute a
+package. Health/catalog probes have no bearer; only the configured source receives
+its read credential. Advertised endpoints remain observations.
+
+One source node compiles a fixed test-authored plan into a Paxlet archive. The
+archive travels unchanged inside the current flat Taskand carrier package. The
+runner retains its original archive hash and Paxlet digest, verifies them on each
+node, explicitly activates B, then verifies outputs and receipt bindings. No
+recipient regenerates the plan. A mismatch must fail before execution. Each call
+uses a verified Paxlet store and an independent writable execution copy.
+
+Other cases exercise gateway stop/restart with retained state, idempotent retries,
+truncated HTTP bodies, changed archive bytes, redirects, immutable URI conflicts,
+serialized sync requests and concurrent executions. A test-only transport proxy
+injects faults; the actual gateway, grant checks, worker, registry and Paxlet
+runtime remain production code. Fixture controls exist only inside this private
+network and do not grant any production capability.
+
+Reports preserve dependency revisions or snapshot digests, test-source hashes,
+image ID, test output, container logs and cleanup status. An existing run.json
+cannot be overwritten. No paid live-model calls occur in this suite. It does not
+establish a Paxlet-native Taskand catalog, revision/tombstone convergence, signed
+receipts or exactly-once execution after uncertain outcomes.
+
+The older test_autonomous_gossip.py and test_nl_paxlet_cluster_pipeline.py scripts
+are legacy fixtures and are no longer selected by the cluster runner. Their fixed
+container assumptions and destination regeneration are superseded by
+ClusterReplicationTests. Offline local selection remains unchanged.

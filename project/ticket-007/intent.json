@@ -1,7 +1,7 @@
 {
   "schema": "new-project.intent/v3",
   "ticket": "ticket-007",
-  "summary": "Complete isolated autonomy tests and verified live outcomes",
+  "summary": "Verified autonomy outcomes and isolated three-node package replication",
   "workstream": "application",
   "classification": {
     "kind": "SERVICE",
@@ -24,13 +24,16 @@
   "delivery": {
     "acceptedBaseSha": "d70b630eb0f5c2ba4f504fefebd513e32cbee6a9",
     "targetBranch": "main",
-    "outcome": "Publish isolated test selection, mandatory failure assertions, and a bounded live benchmark with strict response-envelope handling, complete usage and verified outcomes.",
+    "outcome": "Publish isolated local/live outcome verification and exact-source three-node replication tests with scoped credentials, candidate activation, pinned Paxlet content and bounded failure recovery.",
     "nonGoals": [
       "Production gateway changes",
-      "Protected review configuration changes"
+      "Protected review configuration changes",
+      "New paid live-model calls in cluster continuation",
+      "Production deployment",
+      "Paxlet-only Taskand catalog migration"
     ],
     "complexity": "L",
-    "estimatedMinutes": 90,
+    "estimatedMinutes": 120,
     "budgets": {
       "maxImplementationFiles": 15,
       "maxAffectedComponents": 5,
@@ -39,7 +42,7 @@
     },
     "architecture": {
       "status": "accepted",
-      "decision": "Select explicit local suites; inject deterministic failure fixtures; instrument live model responses, parser diagnostics, bounded repair, complete token accounting and independently verified offline Docker outcomes.",
+      "decision": "Reuse the existing tests ticket after explicit cancelled-owner handoff. Keep offline tests explicitly selected; stage committed pinned inputs into disposable Compose resources. Three real Taskand gateways exchange scoped read credentials. Transfer a source-pinned Paxlet archive through the current flat Taskand package transport; verify/store/materialize at destinations without rebuilding it. Test candidate defaults, explicit activation, offline/rejoin, interrupted imports, conflicts and retries.",
       "components": [
         {
           "name": "tests",
@@ -67,6 +70,15 @@
           "./project/governance-check.sh"
         ],
         "evidence": "Negative outcome and repair-budget regression tests, isolated container tests, bounded live probe artifacts."
+      },
+      {
+        "criterion": "AC-07",
+        "commands": [
+          "bash tests/run_cluster_test.sh",
+          "bash tests/run_e2e.sh local",
+          "./project/governance-check.sh --base origin/main --head HEAD"
+        ],
+        "evidence": "Exact dependency SHAs, bounded isolated three-node report, failure/rejoin assertions and preserved infrastructure CI blocker."
       }
     ],
     "runtimeDependencies": []
