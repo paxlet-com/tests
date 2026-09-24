@@ -41,7 +41,10 @@ done
 echo "=== [3/4] Running Cluster Mesh and Replication Test Suite ==="
 python3 "${TESTS_ROOT}/tests/test_cluster_replication.py"
 
-echo "=== [4/4] Running End-to-End NL to Paxlet Cluster Pipeline Test Suite ==="
+echo "=== [4/5] Running End-to-End NL to Paxlet Cluster Pipeline Test Suite ==="
 python3 "${TESTS_ROOT}/tests/test_nl_paxlet_cluster_pipeline.py"
+
+echo "=== [5/5] Running Autonomous Background Gossip & Continuous Replication Test Suite ==="
+python3 "${TESTS_ROOT}/tests/test_autonomous_gossip.py"
 
 echo "=== All Cluster Test Suites: PASSED ==="

@@ -67,5 +67,8 @@ bash tests/run_cluster_test.sh
    - Compiles natural language intent or intermediate plan into a validated Paxlet package with cryptographic manifest and SHA-256 digest (`urn:paxlet:...`).
    - Packages the bundle into a Taskand cluster procedure and broadcasts it across the mesh.
    - Nodes autonomously pull the procedure, verify checksums, and execute concurrently, returning node-specific execution data and tamper-evident `.paxlet/receipts/` across all 3 nodes.
+4. **Autonomous Background Gossip & Continuous Replication Engine**:
+   - Background daemon engine in Taskand Gateway (`gateway/gossip.py`, `GET /api/cluster/gossip`) continuously discovers peers, exchanges catalog state, pulls missing packages, and auto-approves them.
+   - Requires zero operator intervention or manual trigger procedures to achieve eventual consistency across the entire cluster.
 
 
