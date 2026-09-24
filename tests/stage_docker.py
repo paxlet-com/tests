@@ -48,6 +48,11 @@ def committed_source(source, destination, paths, *, snapshot_allowed=False):
     return head
 
 
+def tests_dirty(tests):
+    return bool(subprocess.check_output(
+        ['git', '-C', str(tests.parent), 'status', '--porcelain', '--', tests.name]))
+
+
 def stage(out):
     tests = Path(__file__).resolve().parent
     heads = {}
@@ -73,7 +78,7 @@ def stage(out):
     files = {str(p.relative_to(out)): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in sorted(out.rglob('*')) if p.is_file()}
     report = {'schema': 'paxlet-tests.source-inventory/v1', 'heads': heads, 'files': files,
-              'testsDirty': bool(subprocess.check_output(['git', '-C', str(tests), 'status', '--porcelain', '--', 'tests']))}
+              'testsDirty': tests_dirty(tests)}
     (out / 'source-inventory.json').write_text(json.dumps(report, sort_keys=True) + '\n')
     print(json.dumps({'source_files': len(files), 'heads': heads,
                      'inventory_sha256': hashlib.sha256((out / 'source-inventory.json').read_bytes()).hexdigest()}))
